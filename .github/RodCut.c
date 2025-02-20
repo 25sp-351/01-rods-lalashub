@@ -2,8 +2,8 @@
 #include <stdlib.h>
 #include <string.h>
 
-
 #define MAX_INPUT_LINES 100
+#define MAX_LINE_LENGTH 256
 
 typedef struct {
     int length;
@@ -11,44 +11,47 @@ typedef struct {
 } Piece;
 
 void read_pieces(Piece *pieces, int *num_pieces) {
-    char line[256];
+    char line[MAX_LINE_LENGTH];
     *num_pieces = 0;
 
     while (fgets(line, sizeof(line), stdin) != NULL) {
-        if (sscanf(line, "%d, %d", &pieces[*num_pieces].length, &pieces[*num_pieces].value) == 2) {
-            (*num_pieces)++;
+        if (sscanf(line, "%d, %d", &pieces[*num_pieces].length, &pieces[*num_pieces].value) != 2) {
+            fprintf(stderr, "Invalid input format: %s\n", line);
+            continue;
         }
+        (*num_pieces)++;
     }
+}
+
+int compare_pieces(const void *a, const void *b) {
+    double ratio1 = (double)((Piece *)a)->value / ((Piece *)a)->length;
+    double ratio2 = (double)((Piece *)b)->value / ((Piece *)b)->length;
+    return (ratio2 > ratio1) - (ratio2 < ratio1); 
 }
 
 void sort_pieces_by_ratio(Piece *pieces, int num_pieces) {
-    for (int i = 0; i < num_pieces - 1; i++) {
-        for (int j = 0; j < num_pieces - i - 1; j++) {
-            double ratio1 = (double)pieces[j].value / pieces[j].length;
-            double ratio2 = (double)pieces[j + 1].value / pieces[j + 1].length;
-            if (ratio1 < ratio2) {
-                Piece temp = pieces[j];
-                pieces[j] = pieces[j + 1];
-                pieces[j + 1] = temp;
-            }
+    qsort(pieces, num_pieces, sizeof(Piece), compare_pieces);
+}
+
+void calculate_cutting_plan(Piece *pieces, int num_pieces, int supplied_length, int *cut_counts, int *total_value, int *remaining_length) {
+    *remaining_length = supplied_length;
+    *total_value = 0;
+
+    for (int ix = 0; ix < num_pieces && *remaining_length > 0; ix++) {
+        cut_counts[ix] = *remaining_length / pieces[ix].length;
+        if (cut_counts[ix] > 0) {
+            *total_value += cut_counts[ix] * pieces[ix].value;
+            *remaining_length -= cut_counts[ix] * pieces[ix].length;
         }
     }
 }
 
-void print_cutting_plan(Piece *pieces, int num_pieces, int supplied_length) {
-    int remaining_length = supplied_length;
-    int total_value = 0;
-
-    for (int i = 0; i < num_pieces && remaining_length > 0; i++) {
-        int num_cuts = remaining_length / pieces[i].length;
-        if (num_cuts > 0) {
-            int value = num_cuts * pieces[i].value;
-            printf("%d @ %d = %d\n", num_cuts, pieces[i].length, value);
-            remaining_length -= num_cuts * pieces[i].length;
-            total_value += value;
+void print_cutting_plan(Piece *pieces, int num_pieces, int *cut_counts, int remaining_length, int total_value) {
+    for (int ix = 0; ix < num_pieces; ix++) {
+        if (cut_counts[ix] > 0) {
+            printf("%d @ %d = %d\n", cut_counts[ix], pieces[ix].length, cut_counts[ix] * pieces[ix].value);
         }
     }
-
     printf("Remainder: %d\n", remaining_length);
     printf("Value: %d\n", total_value);
 }
@@ -71,7 +74,11 @@ int main(int argc, char *argv[]) {
 
     sort_pieces_by_ratio(pieces, num_pieces);
 
-    print_cutting_plan(pieces, num_pieces, supplied_length);
+    int cut_counts[MAX_INPUT_LINES] = {0};
+    int total_value = 0, remaining_length = 0;
+
+    calculate_cutting_plan(pieces, num_pieces, supplied_length, cut_counts, &total_value, &remaining_length);
+    print_cutting_plan(pieces, num_pieces, cut_counts, remaining_length, total_value);
 
     return 0;
 }
